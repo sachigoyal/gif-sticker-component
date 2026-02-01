@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
   const query = searchParams.get("q") || "";
   const limit = searchParams.get("limit") || "20";
 
-  const apiKey = process.env.GIPHY_API_KEY; // NOT NEXT_PUBLIC_
+  const apiKey = process.env.GIPHY_API_KEY;
   if (!apiKey) {
     return NextResponse.json({ error: "API key not configured" }, { status: 500 });
   }
