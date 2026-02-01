@@ -202,17 +202,6 @@ function GifPickerContent({
           )}
         </div>
       </div>
-
-      <div className="flex justify-end">
-        <a
-          href="https://giphy.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-muted-foreground hover:text-foreground"
-        >
-          Powered by GIPHY
-        </a>
-      </div>
     </div>
   );
 }
