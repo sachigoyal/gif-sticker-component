@@ -1,11 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  useQuery,
-  QueryClient,
-  QueryClientProvider,
-} from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
@@ -82,8 +78,8 @@ function GifPickerContent({
   const { data: displayItems = [], isLoading } = useQuery({
     queryKey: ["giphy", activeTab, debouncedQuery, limit],
     queryFn: () => fetchGiphy(apiKey, activeTab, debouncedQuery, limit),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 30 * 60 * 1000, // 30 minutes
+    staleTime: 5 * 60 * 1000, 
+    gcTime: 30 * 60 * 1000, 
   });
 
   const getPlaceholder = () => {
@@ -221,14 +217,5 @@ function GifPickerContent({
   );
 }
 
-const queryClient = new QueryClient();
-
-export function GifPicker(props: GifPickerProps) {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <GifPickerContent {...props} />
-    </QueryClientProvider>
-  );
-}
-
+export { GifPickerContent as GifPicker };
 export type { GifResult, GifPickerProps, ContentType };
