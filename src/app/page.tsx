@@ -32,7 +32,6 @@ export default function Home() {
         </div>
 
         <GifPicker
-          apiKey={process.env.NEXT_PUBLIC_GIPHY_API_KEY!}
           onSelect={handleSelect}
           columns={3}
           limit={15}

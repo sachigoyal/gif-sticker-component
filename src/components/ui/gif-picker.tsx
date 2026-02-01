@@ -35,7 +35,6 @@ interface GifResult {
 }
 
 interface GifPickerProps {
-  apiKey: string;
   onSelect?: (gif: GifResult) => void;
   columns?: number;
   limit?: number;
@@ -45,23 +44,22 @@ interface GifPickerProps {
 }
 
 async function fetchGiphy(
-  apiKey: string,
   type: ContentType,
   query: string,
   limit: number
 ): Promise<GifResult[]> {
-  const endpoint = type === "gifs" ? "gifs" : "stickers";
-  const url = query.trim()
-    ? `https://api.giphy.com/v1/${endpoint}/search?api_key=${apiKey}&q=${encodeURIComponent(query)}&limit=${limit}&rating=g`
-    : `https://api.giphy.com/v1/${endpoint}/trending?api_key=${apiKey}&limit=${limit}&rating=g`;
+  const params = new URLSearchParams({
+    type,
+    limit: String(limit),
+    ...(query.trim() && { q: query }),
+  });
 
-  const res = await fetch(url);
+  const res = await fetch(`/api/giphy?${params}`);
   const data = await res.json();
   return data.data || [];
 }
 
 function GifPickerContent({
-  apiKey,
   onSelect,
   columns = 3,
   limit = 20,
@@ -77,7 +75,7 @@ function GifPickerContent({
 
   const { data: displayItems = [], isLoading } = useQuery({
     queryKey: ["giphy", activeTab, debouncedQuery, limit],
-    queryFn: () => fetchGiphy(apiKey, activeTab, debouncedQuery, limit),
+    queryFn: () => fetchGiphy(activeTab, debouncedQuery, limit),
     staleTime: 5 * 60 * 1000, 
     gcTime: 30 * 60 * 1000, 
   });
