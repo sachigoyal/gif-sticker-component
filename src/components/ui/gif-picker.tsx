@@ -1,10 +1,17 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState } from "react";
+import {
+  useQuery,
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { Search, X } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useDebounce } from "@/lib/use-debounce";
 
 type ContentType = "gifs" | "stickers";
 
@@ -41,12 +48,23 @@ interface GifPickerProps {
   defaultTab?: ContentType;
 }
 
-interface CachedData {
-  trending: GifResult[];
-  search: { [query: string]: GifResult[] };
+async function fetchGiphy(
+  apiKey: string,
+  type: ContentType,
+  query: string,
+  limit: number
+): Promise<GifResult[]> {
+  const endpoint = type === "gifs" ? "gifs" : "stickers";
+  const url = query.trim()
+    ? `https://api.giphy.com/v1/${endpoint}/search?api_key=${apiKey}&q=${encodeURIComponent(query)}&limit=${limit}&rating=g`
+    : `https://api.giphy.com/v1/${endpoint}/trending?api_key=${apiKey}&limit=${limit}&rating=g`;
+
+  const res = await fetch(url);
+  const data = await res.json();
+  return data.data || [];
 }
 
-export function GifPicker({
+function GifPickerContent({
   apiKey,
   onSelect,
   columns = 3,
@@ -58,11 +76,14 @@ export function GifPicker({
   const [activeTab, setActiveTab] = useState<ContentType>(defaultTab);
   const [query, setQuery] = useState("");
   const [selectedItem, setSelectedItem] = useState<GifResult | null>(null);
-  const [displayItems, setDisplayItems] = useState<GifResult[]>([]);
 
-  const cache = useRef<{ gifs: CachedData; stickers: CachedData }>({
-    gifs: { trending: [], search: {} },
-    stickers: { trending: [], search: {} },
+  const debouncedQuery = useDebounce(query, 300);
+
+  const { data: displayItems = [], isLoading } = useQuery({
+    queryKey: ["giphy", activeTab, debouncedQuery, limit],
+    queryFn: () => fetchGiphy(apiKey, activeTab, debouncedQuery, limit),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes
   });
 
   const getPlaceholder = () => {
@@ -78,89 +99,6 @@ export function GifPicker({
     if (selectedItem?.title) return selectedItem.title;
     return selectedItem?.type === "sticker" ? "Selected Sticker" : "Selected GIF";
   };
-
-  const fetchTrending = useCallback(
-    async (tab: ContentType, forceRefresh = false) => {
-      if (!forceRefresh && cache.current[tab].trending.length > 0) {
-        setDisplayItems(cache.current[tab].trending);
-        return;
-      }
-
-      try {
-        const endpoint = tab === "gifs" ? "gifs" : "stickers";
-        const res = await fetch(
-          `https://api.giphy.com/v1/${endpoint}/trending?api_key=${apiKey}&limit=${limit}&rating=g`
-        );
-        const data = await res.json();
-        const items = data.data || [];
-
-        cache.current[tab].trending = items;
-        setDisplayItems(items);
-      } catch (error) {
-        console.error(`Failed to fetch trending ${tab}:`, error);
-      }
-    },
-    [apiKey, limit]
-  );
-
-  const searchItems = useCallback(
-    async (searchQuery: string, tab: ContentType) => {
-      if (!searchQuery.trim()) {
-        fetchTrending(tab); 
-        return;
-      }
-
-      const cachedResults = cache.current[tab].search[searchQuery];
-      if (cachedResults) {
-        setDisplayItems(cachedResults);
-        return;
-      }
-
-      try {
-        const endpoint = tab === "gifs" ? "gifs" : "stickers";
-        const res = await fetch(
-          `https://api.giphy.com/v1/${endpoint}/search?api_key=${apiKey}&q=${encodeURIComponent(
-            searchQuery
-          )}&limit=${limit}&rating=g`
-        );
-        const data = await res.json();
-        const items = data.data || [];
-
-        cache.current[tab].search[searchQuery] = items;
-        setDisplayItems(items);
-      } catch (error) {
-        console.error(`Failed to search ${tab}:`, error);
-      }
-    },
-    [apiKey, limit, fetchTrending]
-  );
-
-  useEffect(() => {
-    const currentQuery = query.trim();
-    if (currentQuery) {
-      const cachedResults = cache.current[activeTab].search[currentQuery];
-      if (cachedResults) {
-        setDisplayItems(cachedResults);
-      } else {
-        searchItems(currentQuery, activeTab);
-      }
-    } else {
-      const cachedTrending = cache.current[activeTab].trending;
-      if (cachedTrending.length > 0) {
-        setDisplayItems(cachedTrending);
-      } else {
-        fetchTrending(activeTab);
-      }
-    }
-  }, [activeTab]);
-
-  useEffect(() => {
-    const debounce = setTimeout(() => {
-      searchItems(query, activeTab);
-    }, 300);
-
-    return () => clearTimeout(debounce);
-  }, [query, searchItems, activeTab]);
 
   const handleSelect = (item: GifResult) => {
     setSelectedItem(item);
@@ -201,16 +139,10 @@ export function GifPicker({
 
       <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList className="grid w-full grid-cols-2 gap-1 bg-muted ">
-          <TabsTrigger
-            value="gifs"
-            className="text-sm font-medium"
-          >
+          <TabsTrigger value="gifs" className="text-sm font-medium">
             GIFs
           </TabsTrigger>
-          <TabsTrigger
-            value="stickers"
-            className="text-sm font-medium"
-          >
+          <TabsTrigger value="stickers" className="text-sm font-medium">
             Stickers
           </TabsTrigger>
         </TabsList>
@@ -236,7 +168,11 @@ export function GifPicker({
             columns === 4 && "grid-cols-4"
           )}
         >
-          {displayItems.length === 0 ? (
+          {isLoading ? (
+            Array.from({ length: limit }).map((_, i) => (
+              <Skeleton key={i} className="aspect-square rounded-md" />
+            ))
+          ) : displayItems.length === 0 ? (
             <div
               className={cn(
                 "flex items-center justify-center py-12 text-sm text-muted-foreground",
@@ -254,7 +190,8 @@ export function GifPicker({
                 onClick={() => handleSelect(item)}
                 className={cn(
                   "group relative aspect-square overflow-hidden rounded-md bg-muted transition-all duration-150 hover:ring-2 hover:ring-primary hover:ring-offset-2",
-                  selectedItem?.id === item.id && "ring-2 ring-primary ring-offset-2"
+                  selectedItem?.id === item.id &&
+                    "ring-2 ring-primary ring-offset-2"
                 )}
               >
                 <img
@@ -268,7 +205,6 @@ export function GifPicker({
             ))
           )}
         </div>
-
       </div>
 
       <div className="flex justify-end">
@@ -282,6 +218,16 @@ export function GifPicker({
         </a>
       </div>
     </div>
+  );
+}
+
+const queryClient = new QueryClient();
+
+export function GifPicker(props: GifPickerProps) {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <GifPickerContent {...props} />
+    </QueryClientProvider>
   );
 }
 
